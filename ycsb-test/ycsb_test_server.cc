@@ -6,15 +6,16 @@
 #include "server.h"
 
 int main(int argc, char ** argv) {
-    if (argc != 2) {
-        printf("Usage: %s [server_id]\n", argv[0]);
+    if (argc != 3) {
+        printf("Usage: %s <path-to-config-file> <server_id>\n", argv[0]);
         return -1;
     }
 
-    int32_t server_id = atoi(argv[1]);
+    const char *config_path = argv[1];
+    int32_t server_id = atoi(argv[2]);
     int32_t ret = 0;
     struct GlobalConfig server_conf;
-    ret = load_config("./server_config.json", &server_conf);
+    ret = load_config(config_path, &server_conf);
     assert(ret == 0);
     server_conf.server_id = server_id;
 
