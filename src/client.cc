@@ -184,6 +184,8 @@ void * Client::kv_search_w_cache(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_SEARCH;
     ctx.use_cache = true;
     ctx.kv_info  = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"READ");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_cache_addr  = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_kv_addr     = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket) + 256);
@@ -204,6 +206,8 @@ void * Client::kv_search(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_SEARCH;
     ctx.use_cache = false;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"READ");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_kv_addr     = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.lkey = local_buf_mr_->lkey;
@@ -257,6 +261,8 @@ int Client::kv_insert_w_cache(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_INSERT;
     ctx.use_cache = true;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"INSERT");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
@@ -281,6 +287,8 @@ int Client::kv_insert(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_INSERT;
     ctx.use_cache = false;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"INSERT");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
@@ -372,6 +380,8 @@ int Client::kv_update_w_cache(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_UPDATE;
     ctx.use_cache = true;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"UPDATE");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_kv_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
@@ -399,6 +409,8 @@ int Client::kv_update(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_UPDATE;
     ctx.use_cache = false;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"UPDATE");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_kv_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
@@ -499,6 +511,8 @@ int Client::kv_delete_w_cache(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_DELETE;
     ctx.use_cache = true;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"DELETE");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_cache_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_kv_addr    = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket) + 256);
@@ -526,6 +540,8 @@ int Client::kv_delete(KVInfo * kv_info) {
     ctx.req_type = KV_REQ_DELETE;
     ctx.use_cache = false;
     ctx.kv_info = kv_info;
+    // Initialize per-request context (key_str, vectors sizing)
+    init_kv_req_ctx(&ctx, kv_info, (char *)"DELETE");
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_kv_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
