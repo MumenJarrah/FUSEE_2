@@ -1,5 +1,6 @@
 add_library(ycsb_test ycsb_test.cc)
 add_executable(ycsb_test_client ycsb_test_client.cc)
+add_executable(ycsb_custom_client ycsb_custom_client.cc)
 add_executable(ycsb_test_server ycsb_test_server.cc)
 add_executable(ycsb_wl_loader ycsb_wl_loader.cc)
 add_executable(ycsb_wl_worker ycsb_wl_worker.cc)
@@ -31,6 +32,13 @@ target_link_libraries(ycsb_test_multi_client
 )
 
 target_link_libraries(ycsb_test_client
+    libddckv
+    ycsb_test
+    pthread
+    ibverbs
+)
+
+target_link_libraries(ycsb_custom_client
     libddckv
     ycsb_test
     pthread
