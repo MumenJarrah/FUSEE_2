@@ -118,13 +118,11 @@ int main(int argc, char **argv) {
     Client client(&config);
     pthread_t polling_tid = client.start_polling_thread();
 
-    // Build client KV arrays from preloaded ops (for KVReqCtx flows)
+    // Build client KV array from preloaded ops
     client.num_total_operations_ = 0;
     client.num_local_operations_ = (uint32_t)ops.size();
     client.kv_info_list_ = (KVInfo *)malloc(sizeof(KVInfo) * client.num_local_operations_);
-    client.kv_req_ctx_list_ = (KVReqCtx *)malloc(sizeof(KVReqCtx) * client.num_local_operations_);
     memset(client.kv_info_list_, 0, sizeof(KVInfo) * client.num_local_operations_);
-    memset(client.kv_req_ctx_list_, 0, sizeof(KVReqCtx) * client.num_local_operations_);
 
     uint64_t input_ptr = (uint64_t)client.get_input_buf();
     for (size_t i = 0; i < ops.size(); i++) {
@@ -153,9 +151,7 @@ int main(int argc, char **argv) {
         info->key_len = hdr->key_length;
         info->value_len = hdr->value_length;
 
-        char op_str[8];
-        if (op.is_write) strcpy(op_str, "INSERT"); else strcpy(op_str, "READ");
-        client.init_kv_req_ctx(&client.kv_req_ctx_list_[i], info, op_str);
+        // No need to init KVReqCtx; we will use KVInfo* APIs per op
     }
 
     // Latency histogram
@@ -169,18 +165,18 @@ int main(int argc, char **argv) {
 
     auto fiber_body = [&](uint32_t coro_id, uint32_t st_idx, uint32_t count) {
         if (count == 0) return;
-        client.init_kvreq_space(coro_id, st_idx, count);
         for (uint32_t i = 0; i < count; i++) {
-            KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
-            ctx->coro_id = coro_id;
+            KVInfo *info = &client.kv_info_list_[st_idx + i];
             struct timeval st, et;
-            if (ctx->req_type == KV_REQ_INSERT) {
+            // Determine op type from value_len (writes have value)
+            bool is_write = (info->value_len != 0);
+            if (is_write) {
                 gettimeofday(&st, NULL);
-                (void)client.kv_insert(ctx);
+                (void)client.kv_insert(info);
                 gettimeofday(&et, NULL);
             } else {
                 gettimeofday(&st, NULL);
-                (void)client.kv_search(ctx);
+                (void)client.kv_search(info);
                 gettimeofday(&et, NULL);
             }
             uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
@@ -233,4 +229,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
