@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     struct timeval total_st, total_et;
     gettimeofday(&total_st, NULL);
 
-    // Execute preloaded operations
+    // Execute preloaded operations (skip failed ops for latency/throughput)
     uint64_t ops_done = 0;
     for (size_t i = 0; i < ops.size(); i++) {
         const Op &op = ops[i];
@@ -163,19 +163,24 @@ int main(int argc, char **argv) {
         prepare_kvinfo(client, op.key, value_size, op.is_write, &kv);
 
         struct timeval st, et;
+        bool ok = true;
         if (op.is_write) {
             gettimeofday(&st, NULL);
-            (void)client.kv_insert(&kv);
+            int rc = client.kv_insert(&kv);
             gettimeofday(&et, NULL);
+            if (rc == KV_OPS_FAIL_REDO || rc == KV_OPS_FAIL_RETURN) ok = false;
         } else {
             gettimeofday(&st, NULL);
-            (void)client.kv_search(&kv);
+            void *res = client.kv_search(&kv);
             gettimeofday(&et, NULL);
+            if (res == NULL) ok = false;
         }
-        uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
-        if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs; // cap at 1s bucket
-        lat_hist[(size_t)lat_us]++;
-        ops_done++;
+        if (ok) {
+            uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
+            if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs; // cap at 1s bucket
+            lat_hist[(size_t)lat_us]++;
+            ops_done++;
+        }
     }
 
     gettimeofday(&total_et, NULL);
@@ -188,7 +193,7 @@ int main(int argc, char **argv) {
         for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
             uint64_t cnt = lat_hist[us];
             if (cnt > 0) {
-                lat_out << us << "," << cnt << "\n";
+                lat_out << us << " " << cnt << "\n";
             }
         }
     }
@@ -199,7 +204,7 @@ int main(int argc, char **argv) {
     double tpt = ops_done / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
-        tpt_out << ops_done << "," << tpt << "\n";
+        tpt_out << ops_done << " " << tpt << "\n";
     }
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
