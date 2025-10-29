@@ -7,6 +7,7 @@ add_executable(ycsb_wl_worker ycsb_wl_worker.cc)
 add_executable(ycsb_test_multi_client ycsb_test_multi_client.cc)
 add_executable(ycsb_multi_client_cont_tpt ycsb_multi_client_cont_tpt.cc)
 add_executable(ycsb_server_crash_multi_client ycsb_server_crash_multi_client.cc)
+add_executable(ycsb_custom_client_fb ycsb_custom_client_fb.cc)
 
 target_compile_options(ycsb_test_client
     PRIVATE
@@ -77,6 +78,13 @@ target_link_libraries(ycsb_multi_client_cont_tpt
 target_link_libraries(ycsb_server_crash_multi_client
     ycsb_test
     libddckv
+    pthread
+    ibverbs
+)
+
+target_link_libraries(ycsb_custom_client_fb
+    libddckv
+    ycsb_test
     pthread
     ibverbs
 )
