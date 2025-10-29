@@ -118,106 +118,119 @@ int main(int argc, char **argv) {
     Client client(&config);
     pthread_t polling_tid = client.start_polling_thread();
 
-    // Build client KV arrays from preloaded ops (KVInfo + KVReqCtx)
-    client.num_total_operations_ = 0;
-    client.num_local_operations_ = (uint32_t)ops.size();
-    client.kv_info_list_ = (KVInfo *)malloc(sizeof(KVInfo) * client.num_local_operations_);
-    client.kv_req_ctx_list_ = (KVReqCtx *)malloc(sizeof(KVReqCtx) * client.num_local_operations_);
-    memset(client.kv_info_list_, 0, sizeof(KVInfo) * client.num_local_operations_);
-    memset(client.kv_req_ctx_list_, 0, sizeof(KVReqCtx) * client.num_local_operations_);
-
-    uint64_t input_ptr = (uint64_t)client.get_input_buf();
-    for (size_t i = 0; i < ops.size(); i++) {
-        const Op &op = ops[i];
-        KVInfo *info = &client.kv_info_list_[i];
-        // layout: [header][key][value?][tail]
-        KVLogHeader *hdr = (KVLogHeader *)input_ptr;
-        hdr->is_valid = true;
-        hdr->key_length = (uint16_t)op.key.size();
-        hdr->value_length = op.is_write ? value_size : 0;
-        char *key_dst = (char *)(input_ptr + sizeof(KVLogHeader));
-        memcpy(key_dst, op.key.data(), op.key.size());
-        if (op.is_write) {
-            char *val_dst = key_dst + op.key.size();
-            memset(val_dst, 'v', value_size);
-            KVLogTail *tail = (KVLogTail *)(val_dst + value_size);
-            tail->op = KV_OP_INSERT;
-            input_ptr = (uint64_t)(tail + 1);
-        } else {
-            KVLogTail *tail = (KVLogTail *)(key_dst + op.key.size());
-            tail->op = KV_OP_INSERT; // not used for reads
-            input_ptr = (uint64_t)(tail + 1);
-        }
-        info->l_addr = (void *)((uint64_t)hdr);
-        info->lkey = client.get_input_buf_lkey();
-        info->key_len = hdr->key_length;
-        info->value_len = hdr->value_length;
-
-        // Initialize corresponding KVReqCtx similar to init_kv_req_ctx (private)
-        KVReqCtx *req = &client.kv_req_ctx_list_[i];
-        req->kv_info = info;
-        req->lkey = client.get_local_buf_mr()->lkey;
-        req->kv_modify_pr_cas_list.resize(1);
-        int num_idx_rep = client.get_num_idx_rep();
-        int num_rep = client.get_num_rep();
-        if (num_idx_rep > 0) {
-            req->kv_modify_bk_0_cas_list.resize(num_idx_rep - 1);
-            req->kv_modify_bk_1_cas_list.resize(num_idx_rep - 1);
-        }
-        req->log_commit_addr_list.resize(num_rep);
-        req->write_unused_addr_list.resize(num_rep);
-        char key_buf[128] = {0};
-        memcpy(key_buf, (void *)((uint64_t)(info->l_addr) + sizeof(KVLogHeader)), info->key_len);
-        req->key_str = std::string(key_buf);
-        req->req_type = op.is_write ? KV_REQ_INSERT : KV_REQ_SEARCH;
-    }
-
-    // Latency histogram
+    // Latency histogram and coroutine setup
     const uint32_t kMaxLatencyUs = 1000000;
     std::vector<uint64_t> lat_hist(kMaxLatencyUs + 1, 0);
-
-    // Partition ops across fibers
     uint32_t num_coro = client.num_coroutines_ > 0 ? client.num_coroutines_ : 1;
-    uint32_t base = client.num_local_operations_ / num_coro;
-    uint32_t rem = client.num_local_operations_ % num_coro;
 
-    auto fiber_body = [&](uint32_t coro_id, uint32_t st_idx, uint32_t count) {
-        if (count == 0) return;
-        client.init_kvreq_space(coro_id, st_idx, count);
-        for (uint32_t i = 0; i < count; i++) {
-            KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
-            ctx->coro_id = coro_id;
-            struct timeval st, et;
-            if (ctx->req_type == KV_REQ_INSERT) {
-                gettimeofday(&st, NULL);
-                (void)client.kv_insert(ctx);
-                gettimeofday(&et, NULL);
-            } else { // KV_REQ_SEARCH
-                gettimeofday(&st, NULL);
-                (void)client.kv_search(ctx);
-                gettimeofday(&et, NULL);
-            }
-            uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
-            if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
-            lat_hist[(size_t)lat_us]++;
-        }
-    };
-
-    // Time the whole run and launch fibers
+    // Time the whole run
     struct timeval total_st, total_et;
     gettimeofday(&total_st, NULL);
-    std::vector<boost::fibers::fiber> fbs;
-    fbs.reserve(num_coro);
-    uint32_t cur = 0;
-    for (uint32_t c = 0; c < num_coro; ++c) {
-        uint32_t cnt = base + (c < rem ? 1u : 0u);
-        uint32_t st = cur;
-        cur += cnt;
-        fbs.emplace_back(fiber_body, c, st, cnt);
-    }
-    for (auto &fb : fbs) fb.join();
-    gettimeofday(&total_et, NULL);
 
+    // Process in chunks like ycsb_test to bound memory
+    const uint32_t kChunkOps = 100000;
+    uint64_t ops_done = 0;
+    for (size_t off = 0; off < ops.size(); off += kChunkOps) {
+        uint32_t this_chunk = (uint32_t)std::min<size_t>(kChunkOps, ops.size() - off);
+
+        // allocate per-chunk arrays
+        client.num_local_operations_ = this_chunk;
+        client.kv_info_list_ = (KVInfo *)malloc(sizeof(KVInfo) * this_chunk);
+        client.kv_req_ctx_list_ = (KVReqCtx *)malloc(sizeof(KVReqCtx) * this_chunk);
+        memset(client.kv_info_list_, 0, sizeof(KVInfo) * this_chunk);
+        memset(client.kv_req_ctx_list_, 0, sizeof(KVReqCtx) * this_chunk);
+
+        // stage key/value for this chunk from start of input buffer
+        uint64_t input_ptr = (uint64_t)client.get_input_buf();
+        for (uint32_t i = 0; i < this_chunk; i++) {
+            const Op &op = ops[off + i];
+            KVInfo *info = &client.kv_info_list_[i];
+            KVLogHeader *hdr = (KVLogHeader *)input_ptr;
+            hdr->is_valid = true;
+            hdr->key_length = (uint16_t)op.key.size();
+            hdr->value_length = op.is_write ? value_size : 0;
+            char *key_dst = (char *)(input_ptr + sizeof(KVLogHeader));
+            memcpy(key_dst, op.key.data(), op.key.size());
+            if (op.is_write) {
+                char *val_dst = key_dst + op.key.size();
+                memset(val_dst, 'v', value_size);
+                KVLogTail *tail = (KVLogTail *)(val_dst + value_size);
+                tail->op = KV_OP_INSERT;
+                input_ptr = (uint64_t)(tail + 1);
+            } else {
+                KVLogTail *tail = (KVLogTail *)(key_dst + op.key.size());
+                tail->op = KV_OP_INSERT;
+                input_ptr = (uint64_t)(tail + 1);
+            }
+            info->l_addr = (void *)((uint64_t)hdr);
+            info->lkey = client.get_input_buf_lkey();
+            info->key_len = hdr->key_length;
+            info->value_len = hdr->value_length;
+
+            // initialize req ctx
+            KVReqCtx *req = &client.kv_req_ctx_list_[i];
+            req->kv_info = info;
+            req->lkey = client.get_local_buf_mr()->lkey;
+            req->kv_modify_pr_cas_list.resize(1);
+            int num_idx_rep = client.get_num_idx_rep();
+            int num_rep = client.get_num_rep();
+            if (num_idx_rep > 0) {
+                req->kv_modify_bk_0_cas_list.resize(num_idx_rep - 1);
+                req->kv_modify_bk_1_cas_list.resize(num_idx_rep - 1);
+            }
+            req->log_commit_addr_list.resize(num_rep);
+            req->write_unused_addr_list.resize(num_rep);
+            char key_buf[128] = {0};
+            memcpy(key_buf, (void *)((uint64_t)(info->l_addr) + sizeof(KVLogHeader)), info->key_len);
+            req->key_str = std::string(key_buf);
+            req->req_type = op.is_write ? KV_REQ_INSERT : KV_REQ_SEARCH;
+        }
+
+        // partition and run fibers on this chunk
+        uint32_t base = this_chunk / num_coro;
+        uint32_t rem = this_chunk % num_coro;
+        auto fiber_body = [&](uint32_t coro_id, uint32_t st_idx, uint32_t count) {
+            if (count == 0) return;
+            client.init_kvreq_space(coro_id, st_idx, count);
+            for (uint32_t i = 0; i < count; i++) {
+                KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
+                ctx->coro_id = coro_id;
+                struct timeval st, et;
+                if (ctx->req_type == KV_REQ_INSERT) {
+                    gettimeofday(&st, NULL);
+                    (void)client.kv_insert(ctx);
+                    gettimeofday(&et, NULL);
+                } else {
+                    gettimeofday(&st, NULL);
+                    (void)client.kv_search(ctx);
+                    gettimeofday(&et, NULL);
+                }
+                uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
+                if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
+                lat_hist[(size_t)lat_us]++;
+            }
+        };
+
+        std::vector<boost::fibers::fiber> fbs;
+        fbs.reserve(num_coro);
+        uint32_t cur = 0;
+        for (uint32_t c = 0; c < num_coro; ++c) {
+            uint32_t cnt = base + (c < rem ? 1u : 0u);
+            uint32_t st = cur;
+            cur += cnt;
+            fbs.emplace_back(fiber_body, c, st, cnt);
+        }
+        for (auto &fb : fbs) fb.join();
+
+        ops_done += this_chunk;
+
+        free(client.kv_info_list_);
+        free(client.kv_req_ctx_list_);
+        client.kv_info_list_ = NULL;
+        client.kv_req_ctx_list_ = NULL;
+    }
+
+    gettimeofday(&total_et, NULL);
     client.stop_polling_thread();
     pthread_join(polling_tid, NULL);
 
@@ -235,7 +248,7 @@ int main(int argc, char **argv) {
     // Throughput
     double elapsed_sec = ((double)(total_et.tv_sec - total_st.tv_sec)) + ((double)(total_et.tv_usec - total_st.tv_usec)) / 1e6;
     if (elapsed_sec <= 0.0) elapsed_sec = 1e-9;
-    uint64_t ops_done = client.num_local_operations_;
+    // ops_done accumulated across chunks
     double tpt = ops_done / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
