@@ -29,8 +29,8 @@ static inline std::string trim(const std::string &s) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 5) {
-        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file>\n", argv[0]);
+    if (argc != 6) {
+        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations>\n", argv[0]);
         return 1;
     }
 
@@ -38,6 +38,11 @@ int main(int argc, char **argv) {
     const char *workload_path = argv[2];
     const char *latency_out_path = argv[3];
     const char *throughput_out_path = argv[4];
+    uint64_t requested_ops = strtoull(argv[5], NULL, 10);
+    if (requested_ops == 0) {
+        fprintf(stderr, "Invalid <num_operations>: %s\n", argv[5]);
+        return 2;
+    }
 
     // Preload workload
     std::ifstream in(workload_path);
@@ -73,7 +78,11 @@ int main(int argc, char **argv) {
 
     struct Op { bool is_write; std::string key; };
     std::vector<Op> ops;
-    ops.reserve(expected_ops);
+    uint64_t max_ops = 0;
+    {
+        max_ops = std::min<uint64_t>(expected_ops, requested_ops);
+        ops.reserve((size_t)max_ops);
+    }
 
     std::string line;
     while (std::getline(in, line)) {
@@ -85,7 +94,7 @@ int main(int argc, char **argv) {
         std::string key = line.substr(delim + 3);
         bool is_write = (opch == 'w' || opch == 'W');
         ops.push_back(Op{is_write, key});
-        if (ops.size() >= expected_ops) break;
+        if (ops.size() >= max_ops) break;
     }
     in.close();
 
