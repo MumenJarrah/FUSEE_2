@@ -163,6 +163,8 @@ int main(int argc, char **argv) {
 
     // Execute preloaded operations (skip failed ops for latency/throughput)
     uint64_t ops_done = 0;
+    uint64_t cas_retry_cnt = 0;
+    uint64_t cas_fail_cnt = 0;
     for (size_t i = 0; i < ops.size(); i++) {
         const Op &op = ops[i];
         KVInfo kv = {};
@@ -172,9 +174,22 @@ int main(int argc, char **argv) {
         bool ok = true;
         if (op.is_write) {
             gettimeofday(&st, NULL);
-            int rc = client.kv_insert(&kv);
+            bool had_retry = false;
+            int rc;
+            do {
+                rc = client.kv_insert(&kv);
+                if (rc == KV_OPS_FAIL_REDO) {
+                    cas_retry_cnt++;
+                    had_retry = true;
+                }
+            } while (rc == KV_OPS_FAIL_REDO);
             gettimeofday(&et, NULL);
-            if (rc == KV_OPS_FAIL_REDO || rc == KV_OPS_FAIL_RETURN) ok = false;
+            if (rc == KV_OPS_FAIL_RETURN) {
+                if (had_retry) cas_fail_cnt++;
+                ok = false;
+            } else if (rc != KV_OPS_SUCCESS) {
+                ok = false;
+            }
         } else {
             gettimeofday(&st, NULL);
             void *res = client.kv_search(&kv);
@@ -215,6 +230,17 @@ int main(int argc, char **argv) {
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
            (unsigned long long)ops_done, elapsed_sec, tpt);
+
+    // Write CAS stats in same directory as throughput file
+    {
+        std::string tpt_path(throughput_out_path);
+        size_t slash = tpt_path.find_last_of("/\\");
+        std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
+        std::string cas_path = dir + "cas_stats.csv";
+        std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
+        cas_out << "failed_cas,retry_cas\n";
+        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "\n";
+    }
 
     return 0;
 }

@@ -130,6 +130,8 @@ int main(int argc, char **argv) {
     // Latency histogram and coroutine setup
     const uint32_t kMaxLatencyUs = 1000000;
     std::vector<uint64_t> lat_hist(kMaxLatencyUs + 1, 0);
+    uint64_t cas_retry_cnt = 0;
+    uint64_t cas_fail_cnt = 0;
     uint32_t num_coro = client.num_coroutines_ > 0 ? client.num_coroutines_ : 1;
 
     // Time the whole run
@@ -207,12 +209,20 @@ int main(int argc, char **argv) {
                 struct timeval st, et;
                 if (ctx->req_type == KV_REQ_INSERT) {
                     gettimeofday(&st, NULL);
-                    (void)client.kv_insert(ctx);
+                    bool had_retry = false;
+                    int rc;
+                    do {
+                        rc = client.kv_insert(ctx);
+                        if (rc == KV_OPS_FAIL_REDO) { cas_retry_cnt++; had_retry = true; }
+                    } while (rc == KV_OPS_FAIL_REDO);
                     gettimeofday(&et, NULL);
+                    if (rc == KV_OPS_FAIL_RETURN) { if (had_retry) cas_fail_cnt++; continue; }
+                    if (rc != KV_OPS_SUCCESS) { continue; }
                 } else {
                     gettimeofday(&st, NULL);
-                    (void)client.kv_search(ctx);
+                    void *res = client.kv_search(ctx);
                     gettimeofday(&et, NULL);
+                    if (res == NULL) { continue; }
                 }
                 uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
                 if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
@@ -231,7 +241,8 @@ int main(int argc, char **argv) {
         }
         for (auto &fb : fbs) fb.join();
 
-        ops_done += this_chunk;
+        // ops_done counts only successful operations in histogram
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) ops_done += lat_hist[us];
 
         free(client.kv_info_list_);
         free(client.kv_req_ctx_list_);
@@ -266,6 +277,17 @@ int main(int argc, char **argv) {
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
            (unsigned long long)ops_done, elapsed_sec, tpt);
+
+    // Write CAS stats next to throughput file
+    {
+        std::string tpt_path(throughput_out_path);
+        size_t slash = tpt_path.find_last_of("/\\");
+        std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
+        std::string cas_path = dir + "cas_stats.csv";
+        std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
+        cas_out << "failed_cas,retry_cas\n";
+        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "\n";
+    }
 
     return 0;
 }
