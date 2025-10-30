@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
                 char *val_dst = key_dst + op.key.size();
                 memset(val_dst, 'v', value_size);
                 KVLogTail *tail = (KVLogTail *)(val_dst + value_size);
-                tail->op = KV_OP_INSERT;
+                tail->op = use_insert ? KV_OP_INSERT : KV_OP_UPDATE;
                 input_ptr = (uint64_t)(tail + 1);
             } else {
                 KVLogTail *tail = (KVLogTail *)(key_dst + op.key.size());
@@ -200,7 +200,7 @@ int main(int argc, char **argv) {
             char key_buf[128] = {0};
             memcpy(key_buf, (void *)((uint64_t)(info->l_addr) + sizeof(KVLogHeader)), info->key_len);
             req->key_str = std::string(key_buf);
-            req->req_type = op.is_write ? KV_REQ_INSERT : KV_REQ_SEARCH;
+            req->req_type = op.is_write ? (use_insert ? KV_REQ_INSERT : KV_REQ_UPDATE) : KV_REQ_SEARCH;
         }
 
         // partition and run fibers on this chunk
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
                     bool had_retry = false;
                     int rc;
                     do {
-                        rc = client.kv_insert(ctx);
+                        rc = (ctx->req_type == KV_REQ_INSERT) ? client.kv_insert(ctx) : client.kv_update(ctx);
                         if (rc == KV_OPS_FAIL_REDO) { cas_retry_cnt++; had_retry = true; }
                     } while (rc == KV_OPS_FAIL_REDO);
                     gettimeofday(&et, NULL);

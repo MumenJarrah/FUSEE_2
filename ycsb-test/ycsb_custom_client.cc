@@ -29,7 +29,7 @@ static inline std::string trim(const std::string &s) {
 }
 
 static inline void prepare_kvinfo(Client &client, const std::string &key, uint32_t value_size,
-                                  bool is_write, KVInfo *out_kv) {
+                                  bool is_write, bool use_insert, KVInfo *out_kv) {
     uint8_t *base = (uint8_t *)client.get_input_buf();
 
     KVLogHeader *header = (KVLogHeader *)base;
@@ -44,7 +44,7 @@ static inline void prepare_kvinfo(Client &client, const std::string &key, uint32
         char *val_dst = key_dst + key.size();
         memset(val_dst, 'v', value_size);
         KVLogTail *tail = (KVLogTail *)(val_dst + value_size);
-        tail->op = KV_OP_INSERT;  // treat writes as insert operations
+        tail->op = use_insert ? KV_OP_INSERT : KV_OP_UPDATE;
     }
 
     out_kv->l_addr = base;
@@ -54,8 +54,8 @@ static inline void prepare_kvinfo(Client &client, const std::string &key, uint32
 }
 
 int main(int argc, char **argv) {
-    if (argc != 6) {
-        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations>\n", argv[0]);
+    if (argc != 7) {
+        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1>\n", argv[0]);
         return 1;
     }
 
@@ -64,6 +64,8 @@ int main(int argc, char **argv) {
     const char *latency_out_path = argv[3];
     const char *throughput_out_path = argv[4];
     uint64_t requested_ops = strtoull(argv[5], NULL, 10);
+    int is_insert_flag = atoi(argv[6]);
+    bool use_insert = (is_insert_flag != 0);
     if (requested_ops == 0) {
         fprintf(stderr, "Invalid <num_operations>: %s\n", argv[5]);
         return 2;
@@ -173,7 +175,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < ops.size(); i++) {
         const Op &op = ops[i];
         KVInfo kv = {};
-        prepare_kvinfo(client, op.key, value_size, op.is_write, &kv);
+        prepare_kvinfo(client, op.key, value_size, op.is_write, use_insert, &kv);
 
         struct timeval st, et;
         bool ok = true;
@@ -183,7 +185,7 @@ int main(int argc, char **argv) {
             bool had_retry = false;
             int rc;
             do {
-                rc = client.kv_insert(&kv);
+                rc = use_insert ? client.kv_insert(&kv) : client.kv_update(&kv);
                 if (rc == KV_OPS_FAIL_REDO) {
                     cas_retry_cnt++;
                     had_retry = true;
