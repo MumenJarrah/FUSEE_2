@@ -162,9 +162,12 @@ int main(int argc, char **argv) {
     gettimeofday(&total_st, NULL);
 
     // Execute preloaded operations (skip failed ops for latency/throughput)
-    uint64_t ops_done = 0;
+    uint64_t attempted_ops = 0;
+    uint64_t success_ops = 0;
+    uint64_t failed_ops = 0;
     uint64_t cas_retry_cnt = 0;
     uint64_t cas_fail_cnt = 0;
+    uint64_t failed_ops_due_to_cas = 0;
     for (size_t i = 0; i < ops.size(); i++) {
         const Op &op = ops[i];
         KVInfo kv = {};
@@ -172,6 +175,7 @@ int main(int argc, char **argv) {
 
         struct timeval st, et;
         bool ok = true;
+        attempted_ops++;
         if (op.is_write) {
             gettimeofday(&st, NULL);
             bool had_retry = false;
@@ -185,7 +189,7 @@ int main(int argc, char **argv) {
             } while (rc == KV_OPS_FAIL_REDO);
             gettimeofday(&et, NULL);
             if (rc == KV_OPS_FAIL_RETURN) {
-                if (had_retry) cas_fail_cnt++;
+                if (had_retry) { cas_fail_cnt++; failed_ops_due_to_cas++; }
                 ok = false;
             } else if (rc != KV_OPS_SUCCESS) {
                 ok = false;
@@ -200,7 +204,9 @@ int main(int argc, char **argv) {
             uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
             if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs; // cap at 1s bucket
             lat_hist[(size_t)lat_us]++;
-            ops_done++;
+            success_ops++;
+        } else {
+            failed_ops++;
         }
     }
 
@@ -222,14 +228,14 @@ int main(int argc, char **argv) {
     // Compute throughput and write throughput file
     double elapsed_sec = ((double)(total_et.tv_sec - total_st.tv_sec)) + ((double)(total_et.tv_usec - total_st.tv_usec)) / 1e6;
     if (elapsed_sec <= 0.0) elapsed_sec = 1e-9; // guard divide-by-zero
-    double tpt = ops_done / elapsed_sec;
+    double tpt = (success_ops) / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
-        tpt_out << ops_done << " " << tpt << "\n";
+        tpt_out << success_ops << " " << tpt << "\n";
     }
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
-           (unsigned long long)ops_done, elapsed_sec, tpt);
+           (unsigned long long)success_ops, elapsed_sec, tpt);
 
     // Write CAS stats in same directory as throughput file
     {
@@ -238,8 +244,9 @@ int main(int argc, char **argv) {
         std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
         std::string cas_path = dir + "cas_stats.csv";
         std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
-        cas_out << "failed_cas,retry_cas,failed_ops_due_to_cas\n";
-        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "," << cas_fail_cnt << "\n";
+        cas_out << "attempted_ops,success_ops,failed_ops,failed_cas,retry_cas,failed_ops_due_to_cas\n";
+        cas_out << attempted_ops << "," << success_ops << "," << failed_ops << ","
+                << cas_fail_cnt << "," << cas_retry_cnt << "," << failed_ops_due_to_cas << "\n";
     }
 
     return 0;

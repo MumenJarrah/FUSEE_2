@@ -130,8 +130,12 @@ int main(int argc, char **argv) {
     // Latency histogram and coroutine setup
     const uint32_t kMaxLatencyUs = 1000000;
     std::vector<uint64_t> lat_hist(kMaxLatencyUs + 1, 0);
+    uint64_t attempted_ops = 0;
+    uint64_t success_ops = 0;
+    uint64_t failed_ops = 0;
     uint64_t cas_retry_cnt = 0;
     uint64_t cas_fail_cnt = 0;
+    uint64_t failed_ops_due_to_cas = 0;
     uint32_t num_coro = client.num_coroutines_ > 0 ? client.num_coroutines_ : 1;
 
     // Time the whole run
@@ -207,6 +211,7 @@ int main(int argc, char **argv) {
                 KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
                 ctx->coro_id = coro_id;
                 struct timeval st, et;
+                attempted_ops++;
                 if (ctx->req_type == KV_REQ_INSERT) {
                     gettimeofday(&st, NULL);
                     bool had_retry = false;
@@ -216,17 +221,18 @@ int main(int argc, char **argv) {
                         if (rc == KV_OPS_FAIL_REDO) { cas_retry_cnt++; had_retry = true; }
                     } while (rc == KV_OPS_FAIL_REDO);
                     gettimeofday(&et, NULL);
-                    if (rc == KV_OPS_FAIL_RETURN) { if (had_retry) cas_fail_cnt++; continue; }
-                    if (rc != KV_OPS_SUCCESS) { continue; }
+                    if (rc == KV_OPS_FAIL_RETURN) { if (had_retry) { cas_fail_cnt++; failed_ops_due_to_cas++; } failed_ops++; continue; }
+                    if (rc != KV_OPS_SUCCESS) { failed_ops++; continue; }
                 } else {
                     gettimeofday(&st, NULL);
                     void *res = client.kv_search(ctx);
                     gettimeofday(&et, NULL);
-                    if (res == NULL) { continue; }
+                    if (res == NULL) { failed_ops++; continue; }
                 }
                 uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
                 if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
                 lat_hist[(size_t)lat_us]++;
+                success_ops++;
             }
         };
 
@@ -275,10 +281,10 @@ int main(int argc, char **argv) {
     double elapsed_sec = ((double)(total_et.tv_sec - total_st.tv_sec)) + ((double)(total_et.tv_usec - total_st.tv_usec)) / 1e6;
     if (elapsed_sec <= 0.0) elapsed_sec = 1e-9;
     // ops_done accumulated across chunks
-    double tpt = ops_done / elapsed_sec;
+    double tpt = success_ops / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
-        tpt_out << ops_done << " " << tpt << "\n";
+        tpt_out << success_ops << " " << tpt << "\n";
     }
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
@@ -291,8 +297,9 @@ int main(int argc, char **argv) {
         std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
         std::string cas_path = dir + "cas_stats.csv";
         std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
-        cas_out << "failed_cas,retry_cas\n";
-        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "\n";
+        cas_out << "attempted_ops,success_ops,failed_ops,failed_cas,retry_cas,failed_ops_due_to_cas\n";
+        cas_out << attempted_ops << "," << success_ops << "," << failed_ops << ","
+                << cas_fail_cnt << "," << cas_retry_cnt << "," << failed_ops_due_to_cas << "\n";
     }
 
     return 0;
