@@ -247,7 +247,7 @@ int main(int argc, char **argv) {
         std::string tpt_path(throughput_out_path);
         size_t slash = tpt_path.find_last_of("/\\");
         std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
-        std::string cas_path = dir + "cas_stats.csv";
+        std::string cas_path = dir + std::string("cas_stats_") + std::to_string(config.server_id) + std::string(".csv");
         std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
         cas_out << "attempted_ops,success_ops,failed_ops,failed_reads_no_match,failed_writes_pre_cas,failed_cas,retry_cas,failed_ops_due_to_cas\n";
         cas_out << attempted_ops << "," << success_ops << "," << failed_ops << ","
