@@ -29,8 +29,8 @@ static inline std::string trim(const std::string &s) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 6) {
-        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations>\n", argv[0]);
+    if (argc != 7) {
+        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1>\n", argv[0]);
         return 1;
     }
 
@@ -39,6 +39,8 @@ int main(int argc, char **argv) {
     const char *latency_out_path = argv[3];
     const char *throughput_out_path = argv[4];
     uint64_t requested_ops = strtoull(argv[5], NULL, 10);
+    int is_insert_flag = atoi(argv[6]);
+    bool use_insert = (is_insert_flag != 0);
     if (requested_ops == 0) {
         fprintf(stderr, "Invalid <num_operations>: %s\n", argv[5]);
         return 2;
