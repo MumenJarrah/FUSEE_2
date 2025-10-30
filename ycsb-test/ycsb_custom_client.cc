@@ -238,8 +238,8 @@ int main(int argc, char **argv) {
         std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
         std::string cas_path = dir + "cas_stats.csv";
         std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
-        cas_out << "failed_cas,retry_cas\n";
-        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "\n";
+        cas_out << "failed_cas,retry_cas,failed_ops_due_to_cas\n";
+        cas_out << cas_fail_cnt << "," << cas_retry_cnt << "," << cas_fail_cnt << "\n";
     }
 
     return 0;

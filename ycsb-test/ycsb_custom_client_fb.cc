@@ -230,6 +230,10 @@ int main(int argc, char **argv) {
             }
         };
 
+        // record base successful ops from histogram before running this chunk
+        uint64_t base_succ = 0;
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) base_succ += lat_hist[us];
+
         std::vector<boost::fibers::fiber> fbs;
         fbs.reserve(num_coro);
         uint32_t cur = 0;
@@ -241,8 +245,10 @@ int main(int argc, char **argv) {
         }
         for (auto &fb : fbs) fb.join();
 
-        // ops_done counts only successful operations in histogram
-        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) ops_done += lat_hist[us];
+        // ops_done counts only new successful operations added by this chunk
+        uint64_t new_succ = 0;
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) new_succ += lat_hist[us];
+        ops_done += (new_succ - base_succ);
 
         free(client.kv_info_list_);
         free(client.kv_req_ctx_list_);
