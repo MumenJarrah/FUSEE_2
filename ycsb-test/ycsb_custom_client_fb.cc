@@ -135,7 +135,9 @@ int main(int argc, char **argv) {
     uint64_t failed_ops = 0;
     uint64_t cas_retry_cnt = 0;
     uint64_t cas_fail_cnt = 0;
-    uint64_t failed_ops_due_to_cas = 0;
+    uint64_t failed_ops_due_to_cas = 0;      // writes that retried and ultimately failed
+    uint64_t failed_reads_no_match = 0;      // read failures
+    uint64_t failed_writes_pre_cas = 0;      // write failures without retry
     uint32_t num_coro = client.num_coroutines_ > 0 ? client.num_coroutines_ : 1;
 
     // Time the whole run
@@ -221,13 +223,13 @@ int main(int argc, char **argv) {
                         if (rc == KV_OPS_FAIL_REDO) { cas_retry_cnt++; had_retry = true; }
                     } while (rc == KV_OPS_FAIL_REDO);
                     gettimeofday(&et, NULL);
-                    if (rc == KV_OPS_FAIL_RETURN) { if (had_retry) { cas_fail_cnt++; failed_ops_due_to_cas++; } failed_ops++; continue; }
+                    if (rc == KV_OPS_FAIL_RETURN) { if (had_retry) { cas_fail_cnt++; failed_ops_due_to_cas++; } else { failed_writes_pre_cas++; } failed_ops++; continue; }
                     if (rc != KV_OPS_SUCCESS) { failed_ops++; continue; }
                 } else {
                     gettimeofday(&st, NULL);
                     void *res = client.kv_search(ctx);
                     gettimeofday(&et, NULL);
-                    if (res == NULL) { failed_ops++; continue; }
+                    if (res == NULL) { failed_ops++; failed_reads_no_match++; continue; }
                 }
                 uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
                 if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
@@ -297,8 +299,9 @@ int main(int argc, char **argv) {
         std::string dir = (slash == std::string::npos) ? std::string("") : tpt_path.substr(0, slash + 1);
         std::string cas_path = dir + "cas_stats.csv";
         std::ofstream cas_out(cas_path.c_str(), std::ios::out | std::ios::trunc);
-        cas_out << "attempted_ops,success_ops,failed_ops,failed_cas,retry_cas,failed_ops_due_to_cas\n";
+        cas_out << "attempted_ops,success_ops,failed_ops,failed_reads_no_match,failed_writes_pre_cas,failed_cas,retry_cas,failed_ops_due_to_cas\n";
         cas_out << attempted_ops << "," << success_ops << "," << failed_ops << ","
+                << failed_reads_no_match << "," << failed_writes_pre_cas << ","
                 << cas_fail_cnt << "," << cas_retry_cnt << "," << failed_ops_due_to_cas << "\n";
     }
 
