@@ -155,9 +155,10 @@ int main(int argc, char **argv) {
     Client client(&config);
     pthread_t polling_tid = client.start_polling_thread();
 
-    // Prepare latency histogram (microsecond accuracy, cap at 1s)
+    // Prepare latency recording: separate histograms for write/read (microsecond buckets, capped at 1s)
     const uint32_t kMaxLatencyUs = 1000000; // 1 second in microseconds
-    std::vector<uint64_t> lat_hist(kMaxLatencyUs + 1, 0);
+    std::vector<uint64_t> write_hist(kMaxLatencyUs + 1, 0);
+    std::vector<uint64_t> read_hist(kMaxLatencyUs + 1, 0);
 
     // Time the whole run
     struct timeval total_st, total_et;
@@ -208,7 +209,7 @@ int main(int argc, char **argv) {
         if (ok) {
             uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
             if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs; // cap at 1s bucket
-            lat_hist[(size_t)lat_us]++;
+            if (op.is_write) write_hist[(size_t)lat_us]++; else read_hist[(size_t)lat_us]++;
             success_ops++;
         } else {
             failed_ops++;
@@ -219,14 +220,17 @@ int main(int argc, char **argv) {
     client.stop_polling_thread();
     pthread_join(polling_tid, NULL);
 
-    // Write latency histogram file: "<latency_us> <count>" per non-zero bucket
+    // Write latency file: write histogram, separator, read histogram (comma-separated: latency,count)
     {
         std::ofstream lat_out(latency_out_path, std::ios::out | std::ios::trunc);
         for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
-            uint64_t cnt = lat_hist[us];
-            if (cnt > 0) {
-                lat_out << us << " " << cnt << "\n";
-            }
+            uint64_t cnt = write_hist[us];
+            if (cnt > 0) lat_out << us << "," << cnt << "\n";
+        }
+        lat_out << "******************************\n";
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
+            uint64_t cnt = read_hist[us];
+            if (cnt > 0) lat_out << us << "," << cnt << "\n";
         }
     }
 

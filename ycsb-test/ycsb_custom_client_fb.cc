@@ -131,7 +131,8 @@ int main(int argc, char **argv) {
 
     // Latency histogram and coroutine setup
     const uint32_t kMaxLatencyUs = 1000000;
-    std::vector<uint64_t> lat_hist(kMaxLatencyUs + 1, 0);
+    std::vector<uint64_t> write_hist(kMaxLatencyUs + 1, 0);
+    std::vector<uint64_t> read_hist(kMaxLatencyUs + 1, 0);
     uint64_t attempted_ops = 0;
     uint64_t success_ops = 0;
     uint64_t failed_ops = 0;
@@ -235,14 +236,14 @@ int main(int argc, char **argv) {
                 }
                 uint64_t lat_us = (uint64_t)(et.tv_sec - st.tv_sec) * 1000000ULL + (uint64_t)(et.tv_usec - st.tv_usec);
                 if (lat_us > kMaxLatencyUs) lat_us = kMaxLatencyUs;
-                lat_hist[(size_t)lat_us]++;
+                if (ctx->req_type == KV_REQ_SEARCH) read_hist[(size_t)lat_us]++; else write_hist[(size_t)lat_us]++;
                 success_ops++;
             }
         };
 
         // record base successful ops from histogram before running this chunk
         uint64_t base_succ = 0;
-        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) base_succ += lat_hist[us];
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) base_succ += (write_hist[us] + read_hist[us]);
 
         std::vector<boost::fibers::fiber> fbs;
         fbs.reserve(num_coro);
@@ -257,7 +258,7 @@ int main(int argc, char **argv) {
 
         // ops_done counts only new successful operations added by this chunk
         uint64_t new_succ = 0;
-        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) new_succ += lat_hist[us];
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) new_succ += (write_hist[us] + read_hist[us]);
         ops_done += (new_succ - base_succ);
 
         free(client.kv_info_list_);
@@ -270,14 +271,17 @@ int main(int argc, char **argv) {
     client.stop_polling_thread();
     pthread_join(polling_tid, NULL);
 
-    // Write latency histogram
+    // Write latency file: write histogram, separator, read histogram (comma-separated: latency,count)
     {
         std::ofstream lat_out(latency_out_path, std::ios::out | std::ios::trunc);
         for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
-            uint64_t cnt = lat_hist[us];
-            if (cnt > 0) {
-                lat_out << us << "," << cnt << "\n";
-            }
+            uint64_t cnt = write_hist[us];
+            if (cnt > 0) lat_out << us << "," << cnt << "\n";
+        }
+        lat_out << "******************************\n";
+        for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
+            uint64_t cnt = read_hist[us];
+            if (cnt > 0) lat_out << us << "," << cnt << "\n";
         }
     }
 
