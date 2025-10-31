@@ -230,13 +230,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Compute throughput and write throughput file
+    // Compute throughput and write throughput file (CSV): tpt,success_ops,total_ops,workload_duration_sec
     double elapsed_sec = ((double)(total_et.tv_sec - total_st.tv_sec)) + ((double)(total_et.tv_usec - total_st.tv_usec)) / 1e6;
     if (elapsed_sec <= 0.0) elapsed_sec = 1e-9; // guard divide-by-zero
     double tpt = (success_ops) / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
-        tpt_out << success_ops << "," << tpt << "\n";
+        tpt_out << tpt << "," << success_ops << "," << attempted_ops << "," << elapsed_sec << "\n";
     }
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",
