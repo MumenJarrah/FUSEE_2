@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
     double tpt = (success_ops) / elapsed_sec;
     {
         std::ofstream tpt_out(throughput_out_path, std::ios::out | std::ios::trunc);
-        tpt_out << success_ops << " " << tpt << "\n";
+        tpt_out << success_ops << "," << tpt << "\n";
     }
 
     printf("Completed %llu ops in %.3f sec (%.2f ops/s)\n",

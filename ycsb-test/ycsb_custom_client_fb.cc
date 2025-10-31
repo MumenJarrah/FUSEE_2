@@ -276,7 +276,7 @@ int main(int argc, char **argv) {
         for (uint32_t us = 0; us <= kMaxLatencyUs; ++us) {
             uint64_t cnt = lat_hist[us];
             if (cnt > 0) {
-                lat_out << us << " " << cnt << "\n";
+                lat_out << us << "," << cnt << "\n";
             }
         }
     }
