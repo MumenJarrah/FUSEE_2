@@ -552,6 +552,9 @@ public:
 
     void get_recover_time(std::vector<struct timeval> & recover_time);
 
+    // stats
+    uint64_t stat_update_cas_soft_fail_; // number of update ops where CAS failed but op returned success via consensus/finish
+
 // for testing
 public:
     int test_get_root(__OUT RaceHashRoot * race_root);

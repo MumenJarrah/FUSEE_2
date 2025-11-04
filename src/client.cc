@@ -57,6 +57,9 @@ Client::Client(const struct GlobalConfig * conf) {
     server_data_len_    = conf->server_data_len;
     micro_workload_num_ = conf->micro_workload_num;
 
+    // init stats
+    stat_update_cas_soft_fail_ = 0;
+
     // create cm
     nm_ = new UDPNetworkManager(conf);
 
@@ -1722,6 +1725,9 @@ void Client::modify_backup_idx_consensus_1(KVReqCtx * ctx) {
         IbvSrList * write_unused_sr_list = gen_log_commit_sr_lists(ctx->coro_id,
             &val, sizeof(uint8_t), ctx->write_unused_addr_list, &num_sr_list);
         post_sr_lists_unsignaled(write_unused_sr_list, num_sr_list);
+        if (ctx->req_type == KV_REQ_UPDATE) {
+            stat_update_cas_soft_fail_++;
+        }
         return;
     }
     if (ctx->consensus_state == KV_CONSENSUS_FAIL) {
@@ -1743,6 +1749,9 @@ void Client::modify_backup_idx_consensus_1(KVReqCtx * ctx) {
         post_sr_lists_unsignaled(write_unused_sr_list, num_sr_list);
         ctx->is_finished = true;
         ctx->ret_val.ret_code = 0;
+        if (ctx->req_type == KV_REQ_UPDATE) {
+            stat_update_cas_soft_fail_++;
+        }
         return;
     }
     if (ctx->consensus_state == KV_CONSENSUS_WIN_ALL) {
