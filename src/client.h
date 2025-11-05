@@ -554,6 +554,10 @@ public:
 
     // stats
     uint64_t stat_update_cas_soft_fail_; // number of update ops where CAS failed but op returned success via consensus/finish
+    uint64_t stat_primary_cas_cmp_fail_;
+    uint64_t stat_primary_cas_success_;
+    uint64_t stat_backup_cas_cmp_fail_;
+    uint64_t stat_backup_cas_success_;
 
 // for testing
 public:

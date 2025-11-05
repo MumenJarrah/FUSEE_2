@@ -59,6 +59,10 @@ Client::Client(const struct GlobalConfig * conf) {
 
     // init stats
     stat_update_cas_soft_fail_ = 0;
+    stat_primary_cas_cmp_fail_ = 0;
+    stat_primary_cas_success_  = 0;
+    stat_backup_cas_cmp_fail_  = 0;
+    stat_backup_cas_success_   = 0;
 
     // create cm
     nm_ = new UDPNetworkManager(conf);
@@ -1901,6 +1905,7 @@ void Client::modify_primary_idx(KVReqCtx * ctx) {
 
     // check update success
     if (*(uint64_t *)ctx->kv_modify_pr_cas_list[0].l_kv_addr != ctx->kv_modify_pr_cas_list[0].orig_value) {
+        stat_primary_cas_cmp_fail_++;
         if (num_idx_rep_ != 1) {
             printf("cannot have happened!\n");
             exit(1);
@@ -1910,15 +1915,15 @@ void Client::modify_primary_idx(KVReqCtx * ctx) {
             ctx->ret_val.ret_code = KV_OPS_FAIL_REDO;
             ctx->is_finished = true;
             mm_->mm_free_cur(&ctx->mm_alloc_ctx);
-        } else if (ctx->req_type == KV_REQ_UPDATE) {
-            ctx->ret_val.ret_code = KV_OPS_SUCCESS;
+        } else if (ctx->req_type == KV_REQ_UPDATE || ctx->req_type == KV_REQ_DELETE) {
+            ctx->ret_val.ret_code = KV_OPS_FAIL_REDO;
             ctx->is_finished = true;
-        } else if (ctx->req_type == KV_REQ_DELETE) {
-            ctx->ret_val.ret_code = KV_OPS_SUCCESS;
-            ctx->is_finished = true;
+            mm_->mm_free_cur(&ctx->mm_alloc_ctx);
         }
         return;
     }
+
+    stat_primary_cas_success_++;
 
     ctx->is_finished = true;
     ctx->ret_val.ret_code = KV_OPS_SUCCESS;
@@ -1985,20 +1990,21 @@ void Client::modify_primary_idx_sync(KVReqCtx * ctx) {
 
     // check update success
     if (*(uint64_t *)ctx->kv_modify_pr_cas_list[0].l_kv_addr != ctx->kv_modify_pr_cas_list[0].orig_value) {
+        stat_primary_cas_cmp_fail_++;
         // Can only happen when there is only one index replica
         if (ctx->req_type == KV_REQ_INSERT) {
             ctx->ret_val.ret_code = KV_OPS_FAIL_REDO;
             ctx->is_finished = true;
             mm_->mm_free_cur(&ctx->mm_alloc_ctx);
-        } else if (ctx->req_type == KV_REQ_UPDATE) {
-            ctx->ret_val.ret_code = KV_OPS_SUCCESS;
+        } else if (ctx->req_type == KV_REQ_UPDATE || ctx->req_type == KV_REQ_DELETE) {
+            ctx->ret_val.ret_code = KV_OPS_FAIL_REDO;
             ctx->is_finished = true;
-        } else if (ctx->req_type == KV_REQ_DELETE) {
-            ctx->ret_val.ret_code = KV_OPS_SUCCESS;
-            ctx->is_finished = true;
+            mm_->mm_free_cur(&ctx->mm_alloc_ctx);
         }
         return;
     }
+
+    stat_primary_cas_success_++;
 
     ctx->is_finished = true;
     ctx->ret_val.ret_code = 0;
@@ -2040,11 +2046,13 @@ void Client::check_cas_consensus_0(KVReqCtx * ctx) {
         if (swap_back == expected_value || swap_back == target_value) {
             // if the value is expected value then the cas is successful
             // if the value is the target value then the cas is previously successful and this can only happen under recovery
+            stat_backup_cas_success_++;
             win_addr_cnt[target_value] ++;
             continue;
         }
 
         // others win and show itself as the swap-back value
+        stat_backup_cas_cmp_fail_++;
         win_addr_cnt[swap_back] ++;
 
         // construct a cas request
@@ -2126,11 +2134,13 @@ void Client::check_cas_consensus_0_sync(KVReqCtx * ctx) {
         if (swap_back == expected_value || swap_back == target_value) {
             // if the value is expected value then the cas is successful
             // if the value is the target value then the cas is previously successful and this can only happen under recovery
+            stat_backup_cas_success_++;
             win_addr_cnt[target_value] ++;
             continue;
         }
 
         // others win and show itself as the swap-back value
+        stat_backup_cas_cmp_fail_++;
         win_addr_cnt[swap_back] ++;
 
         // construct a cas request
