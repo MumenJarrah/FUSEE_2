@@ -98,7 +98,8 @@ static void * thread_main(void *argp) {
         // minimally init req ctx like init_kv_req_ctx
         KVReqCtx &rc = client.kv_req_ctx_list_[i];
         rc.kv_info = &client.kv_info_list_[i];
-        rc.lkey = client.get_input_buf_lkey();
+        // For RDMA reads into per-coro local buffers, lkey must be for local_buf_mr_
+        rc.lkey = client.get_local_buf_mr()->lkey;
         rc.kv_modify_pr_cas_list.resize(1);
         // num_idx_rep is in conf
         rc.kv_modify_bk_0_cas_list.resize(conf.num_idx_rep - 1);
