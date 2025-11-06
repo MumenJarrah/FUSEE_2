@@ -5,6 +5,7 @@ add_executable(ycsb_test_server ycsb_test_server.cc)
 add_executable(ycsb_wl_loader ycsb_wl_loader.cc)
 add_executable(ycsb_wl_worker ycsb_wl_worker.cc)
 add_executable(ycsb_test_multi_client ycsb_test_multi_client.cc)
+add_executable(ycsb_custom_multi_client ycsb_custom_multi_client.cc)
 add_executable(ycsb_multi_client_cont_tpt ycsb_multi_client_cont_tpt.cc)
 add_executable(ycsb_server_crash_multi_client ycsb_server_crash_multi_client.cc)
 add_executable(ycsb_custom_client_fb ycsb_custom_client_fb.cc)
@@ -29,6 +30,13 @@ target_link_libraries(ycsb_test
 target_link_libraries(ycsb_test_multi_client
     libddckv
     ycsb_test
+    ibverbs
+)
+
+target_link_libraries(ycsb_custom_multi_client
+    libddckv
+    ycsb_test
+    pthread
     ibverbs
 )
 
