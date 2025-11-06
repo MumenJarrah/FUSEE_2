@@ -144,6 +144,9 @@ int main(int argc, char **argv) {
     uint64_t failed_writes_pre_cas = 0;      // write failures without retry
     uint32_t num_coro = client.num_coroutines_ > 0 ? client.num_coroutines_ : 1;
 
+    // shared stop flag for ctx->should_stop (avoids null deref in client code)
+    static volatile bool shared_should_stop = false;
+
     // debug breadcrumbs (one-shot)
     bool dbg_printed_pr_succ = false, dbg_printed_pr_fail = false;
     bool dbg_printed_bk_succ = false, dbg_printed_bk_fail = false;
@@ -219,7 +222,8 @@ int main(int argc, char **argv) {
             if (count == 0) return;
             client.init_kvreq_space(coro_id, st_idx, count);
             for (uint32_t i = 0; i < count; i++) {
-                KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
+            KVReqCtx *ctx = &client.kv_req_ctx_list_[st_idx + i];
+            ctx->should_stop = &shared_should_stop;
                 ctx->coro_id = coro_id;
                 struct timeval st, et;
                 attempted_ops++;
