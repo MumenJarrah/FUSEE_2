@@ -137,6 +137,10 @@ static void * thread_main(void *argp) {
         fibers.emplace_back([&, c, st, cnt]() {
             // prepare per-coro spaces
             client.init_kvreq_space((uint32_t)c, st, cnt);
+            // disable client-side caching for all ops in this fiber
+            for (uint32_t i = 0; i < cnt; ++i) {
+                client.kv_req_ctx_list_[st + i].use_cache = false;
+            }
             uint64_t succ = 0, fail = 0;
             for (uint32_t i = 0; i < cnt; ++i) {
                 KVReqCtx *ctx = &client.kv_req_ctx_list_[st + i];
