@@ -54,8 +54,8 @@ static inline void prepare_kvinfo(Client &client, const std::string &key, uint32
 }
 
 int main(int argc, char **argv) {
-    if (argc != 7) {
-        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1>\n", argv[0]);
+    if (argc != 7 && argc != 8) {
+        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1> [debug:0|1]\n", argv[0]);
         return 1;
     }
 
@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     const char *throughput_out_path = argv[4];
     uint64_t requested_ops = strtoull(argv[5], NULL, 10);
     int is_insert_flag = atoi(argv[6]);
+    bool debug_mode = (argc == 8) ? (atoi(argv[7]) != 0) : false;
     bool use_insert = (is_insert_flag != 0);
     if (requested_ops == 0) {
         fprintf(stderr, "Invalid <num_operations>: %s\n", argv[5]);
@@ -154,6 +155,10 @@ int main(int argc, char **argv) {
     // Build client and start polling thread
     Client client(&config);
     pthread_t polling_tid = client.start_polling_thread();
+    // debug breadcrumbs (one-shot)
+    bool dbg_printed_pr_succ = false, dbg_printed_pr_fail = false;
+    bool dbg_printed_bk_succ = false, dbg_printed_bk_fail = false;
+    bool dbg_printed_soft = false;
 
     // Prepare latency recording: separate histograms for write/read (microsecond buckets, capped at 1s)
     const uint32_t kMaxLatencyUs = 1000000; // 1 second in microseconds
@@ -213,6 +218,30 @@ int main(int argc, char **argv) {
             success_ops++;
         } else {
             failed_ops++;
+        }
+
+        // Debug breadcrumbs: print once when we observe first event in each category
+        if (debug_mode) {
+            if (!dbg_printed_pr_succ && client.stat_primary_cas_success_ > 0) {
+                printf("[DEBUG] Primary CAS success observed.\n");
+                dbg_printed_pr_succ = true;
+            }
+            if (!dbg_printed_pr_fail && client.stat_primary_cas_cmp_fail_ > 0) {
+                printf("[DEBUG] Primary CAS compare failure observed.\n");
+                dbg_printed_pr_fail = true;
+            }
+            if (!dbg_printed_bk_succ && client.stat_backup_cas_success_ > 0) {
+                printf("[DEBUG] Backup CAS success observed.\n");
+                dbg_printed_bk_succ = true;
+            }
+            if (!dbg_printed_bk_fail && client.stat_backup_cas_cmp_fail_ > 0) {
+                printf("[DEBUG] Backup CAS compare failure observed.\n");
+                dbg_printed_bk_fail = true;
+            }
+            if (!dbg_printed_soft && client.stat_update_cas_soft_fail_ > 0) {
+                printf("[DEBUG] Update soft-finish (consensus FINISH/FAIL) observed.\n");
+                dbg_printed_soft = true;
+            }
         }
     }
 
