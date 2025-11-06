@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
                 ctx->coro_id = coro_id;
                 struct timeval st, et;
                 attempted_ops++;
-                if (ctx->req_type == KV_REQ_INSERT) {
+                if (ctx->req_type == KV_REQ_INSERT || ctx->req_type == KV_REQ_UPDATE) {
                     gettimeofday(&st, NULL);
                     bool had_retry = false;
                     int rc;
