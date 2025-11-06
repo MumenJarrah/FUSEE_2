@@ -218,6 +218,8 @@ void * Client::kv_search(KVInfo * kv_info) {
     ctx.local_bucket_addr = (RaceHashBucket *)local_buf_;
     ctx.local_kv_addr     = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -274,6 +276,8 @@ int Client::kv_insert_w_cache(KVInfo * kv_info) {
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -300,6 +304,8 @@ int Client::kv_insert(KVInfo * kv_info) {
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -395,6 +401,8 @@ int Client::kv_update_w_cache(KVInfo * kv_info) {
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.local_cache_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t) * num_replication_);
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -424,6 +432,8 @@ int Client::kv_update(KVInfo * kv_info) {
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.op_laddr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -526,6 +536,8 @@ int Client::kv_delete_w_cache(KVInfo * kv_info) {
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
@@ -554,6 +566,8 @@ int Client::kv_delete(KVInfo * kv_info) {
     ctx.local_cas_target_value_addr = (void *)((uint64_t)local_buf_ + 4 * sizeof(RaceHashBucket));
     ctx.local_cas_return_value_addr = (void *)((uint64_t)ctx.local_cas_target_value_addr + sizeof(uint64_t));
     ctx.lkey = local_buf_mr_->lkey;
+    volatile bool should_stop = false;
+    ctx.should_stop = &should_stop;
 
     // print_log(DEBUG, "[%s] start", __FUNCTION__);
     prepare_request(&ctx);
