@@ -4,11 +4,11 @@
 #include <stdint.h>
 #include "kv_utils.h"
 
-#define RACE_HASH_GLOBAL_DEPTH              (5)
-#define RACE_HASH_INIT_LOCAL_DEPTH          (5)
+#define RACE_HASH_GLOBAL_DEPTH              (0)
+#define RACE_HASH_INIT_LOCAL_DEPTH          (0)
 #define RACE_HASH_SUBTABLE_NUM              (1 << RACE_HASH_GLOBAL_DEPTH)
 #define RACE_HASH_INIT_SUBTABLE_NUM         (1 << RACE_HASH_INIT_LOCAL_DEPTH)
-#define RACE_HASH_MAX_GLOBAL_DEPTH          (5)
+#define RACE_HASH_MAX_GLOBAL_DEPTH          (0)
 #define RACE_HASH_MAX_SUBTABLE_NUM          (1 << RACE_HASH_MAX_GLOBAL_DEPTH)
 #define RACE_HASH_ADDRESSABLE_BUCKET_NUM    (34000ULL)
 #define RACE_HASH_SUBTABLE_BUCKET_NUM       (RACE_HASH_ADDRESSABLE_BUCKET_NUM * 3 / 2)
