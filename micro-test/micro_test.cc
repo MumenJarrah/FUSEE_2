@@ -165,6 +165,7 @@ void * run_client(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     config.main_core_id = args->main_core_id;
     config.poll_core_id = args->poll_core_id;
@@ -262,6 +263,7 @@ void * run_client_cr(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     config.main_core_id = args->main_core_id;
     config.poll_core_id = args->poll_core_id;

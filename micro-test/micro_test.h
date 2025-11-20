@@ -37,6 +37,7 @@ typedef struct TagMicroRunClientArgs {
     uint32_t num_threads;
     char * op_type;
     Client * client;
+    uint32_t primary_node_limit;
 } MicroRunClientArgs;
 
 void * run_client(void * _args);

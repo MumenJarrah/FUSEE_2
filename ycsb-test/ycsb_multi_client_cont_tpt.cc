@@ -7,8 +7,8 @@
 #include "ycsb_test.h"
 
 int main(int argc, char ** argv) {
-    if (argc != 4) {
-        printf("Usage: %s path-to-config-file workload-name num-clients\n", argv[0]);
+    if (argc < 4 || argc > 5) {
+        printf("Usage: %s path-to-config-file workload-name num-clients [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
@@ -18,6 +18,12 @@ int main(int argc, char ** argv) {
     GlobalConfig config;
     int ret = load_config(argv[1], &config);
     assert(ret == 0);
+    if (argc == 5) {
+        if (set_primary_node_limit_from_str(&config, argv[4]) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", argv[4]);
+            return 1;
+        }
+    }
 
     // bind this process to main core
     // run client args
@@ -42,6 +48,7 @@ int main(int argc, char ** argv) {
         client_args_list[i].ret_num_ops = 0;
         client_args_list[i].ret_faile_num = 0;
         client_args_list[i].num_threads = num_clients;
+        client_args_list[i].primary_node_limit = config.primary_node_limit;
         pthread_t tid;
         pthread_create(&tid, NULL, run_client_cont_tpt, &client_args_list[i]);
         tid_list[i] = tid;

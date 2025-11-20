@@ -4,8 +4,8 @@
 #include "ycsb_test.h"
 
 int main(int argc, char ** argv) {
-    if (argc != 3) {
-        printf("Usage: %s path-to-config-file workload-name\n", argv[0]);
+    if (argc < 3 || argc > 4) {
+        printf("Usage: %s path-to-config-file workload-name [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
@@ -15,6 +15,12 @@ int main(int argc, char ** argv) {
     GlobalConfig config;
     ret = load_config(argv[1], &config);
     assert(ret == 0);
+    if (argc == 4) {
+        if (set_primary_node_limit_from_str(&config, argv[3]) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", argv[3]);
+            return 1;
+        }
+    }
     printf("running with %d coros\n", config.num_coroutines);
 
     // bind this process to main core

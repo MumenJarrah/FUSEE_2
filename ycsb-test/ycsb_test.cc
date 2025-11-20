@@ -881,6 +881,7 @@ void * run_client_lat(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     config.main_core_id = args->main_core_id;
@@ -941,6 +942,7 @@ void * run_client_cr_lat(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     // config.main_core_id = args->main_core_id;
@@ -1000,6 +1002,7 @@ void * run_client(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     config.main_core_id = args->main_core_id;
@@ -1077,6 +1080,7 @@ void * run_client_cont_tpt(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     config.main_core_id = args->main_core_id;
@@ -1140,6 +1144,7 @@ void * run_client_on_crash_cont_tpt(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     config.main_core_id = args->main_core_id;
@@ -1199,6 +1204,7 @@ void * run_client_cr(void * _args) {
     GlobalConfig config;
     ret = load_config(args->config_file, &config);
     assert(ret == 0);
+    set_primary_node_limit(&config, args->primary_node_limit);
 
     // modify config to config
     // config.main_core_id = args->main_core_id;

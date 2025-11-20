@@ -120,6 +120,7 @@ int load_config(const char * fname, __OUT struct GlobalConfig * config) {
         config->server_id = pt.get<uint32_t>("server_id");
         config->udp_port  = pt.get<uint16_t>("udp_port");
         config->memory_num = pt.get<uint16_t>("memory_num");
+        config->primary_node_limit = config->memory_num;
 
         int i = 0;
         BOOST_FOREACH(boost::property_tree::ptree::value_type & v, pt.get_child("memory_ips")) {
@@ -160,6 +161,33 @@ int load_config(const char * fname, __OUT struct GlobalConfig * config) {
     } catch (boost::property_tree::ptree_error & e) {
         return -1;
     }
+    return 0;
+}
+
+void set_primary_node_limit(struct GlobalConfig * config, uint32_t limit) {
+    if (limit == 0) {
+        limit = 1;
+    }
+    if (limit > config->memory_num) {
+        limit = config->memory_num;
+    }
+    config->primary_node_limit = limit;
+}
+
+int set_primary_node_limit_from_str(struct GlobalConfig * config, const char * value_str) {
+    if (value_str == NULL) {
+        return -1;
+    }
+    char * endptr = NULL;
+    long parsed = strtol(value_str, &endptr, 10);
+    if (endptr == value_str || *endptr != '\0') {
+        return -1;
+    }
+    if (parsed <= 0) {
+        parsed = 1;
+    }
+    uint32_t limit = (uint32_t)parsed;
+    set_primary_node_limit(config, limit);
     return 0;
 }
 

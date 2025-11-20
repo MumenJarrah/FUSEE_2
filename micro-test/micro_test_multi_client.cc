@@ -59,6 +59,7 @@ static void start_client_threads(char * op_type, int num_clients, GlobalConfig *
         client_args_list[i].ret_fail_search_num = 0;
         client_args_list[i].ret_fail_delete_num = 0;
         client_args_list[i].op_type = op_type;
+        client_args_list[i].primary_node_limit = config->primary_node_limit;
         pthread_t tid;
         pthread_create(&tid, NULL, run_client, &client_args_list[i]);
         tid_list[i] = tid;
@@ -99,16 +100,23 @@ static void start_client_threads(char * op_type, int num_clients, GlobalConfig *
 }
 
 int main(int argc, char ** argv) {
-    if (argc != 3) {
-        printf("Usage: %s path-to-config-file num-clients\n", argv[0]);
+    if (argc < 3 || argc > 4) {
+        printf("Usage: %s path-to-config-file num-clients [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
     int num_clients = atoi(argv[2]);
+    const char *primary_arg = (argc == 4) ? argv[3] : NULL;
 
     GlobalConfig config;
     int ret = load_config(argv[1], &config);
     assert(ret == 0);
+    if (primary_arg != NULL) {
+        if (set_primary_node_limit_from_str(&config, primary_arg) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", primary_arg);
+            return 1;
+        }
+    }
 
     start_client_threads("INSERT", num_clients, &config, argv[1]);   
 }

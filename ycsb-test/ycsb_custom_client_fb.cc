@@ -29,8 +29,8 @@ static inline std::string trim(const std::string &s) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 7 && argc != 8) {
-        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1> [debug:0|1]\n", argv[0]);
+    if (argc < 7 || argc > 9) {
+        printf("Usage: %s <path-to-config-file> <path-to-workload-file> <latency-output-file> <throughput-output-file> <num_operations> <is_insert:0|1> [debug:0|1] [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
@@ -41,7 +41,14 @@ int main(int argc, char **argv) {
     uint64_t requested_ops = strtoull(argv[5], NULL, 10);
     int is_insert_flag = atoi(argv[6]);
     bool use_insert = (is_insert_flag != 0);
-    bool debug_mode = (argc == 8) ? (atoi(argv[7]) != 0) : false;
+    bool debug_mode = false;
+    const char *primary_arg = NULL;
+    if (argc >= 8) {
+        debug_mode = (atoi(argv[7]) != 0);
+    }
+    if (argc == 9) {
+        primary_arg = argv[8];
+    }
     if (requested_ops == 0) {
         fprintf(stderr, "Invalid <num_operations>: %s\n", argv[5]);
         return 2;
@@ -111,6 +118,12 @@ int main(int argc, char **argv) {
     GlobalConfig config;
     ret = load_config(config_path, &config);
     assert(ret == 0);
+    if (primary_arg != NULL) {
+        if (set_primary_node_limit_from_str(&config, primary_arg) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", primary_arg);
+            return 2;
+        }
+    }
     printf("running with %d coros\n", config.num_coroutines);
 
     // Bind main thread to configured core

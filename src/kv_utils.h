@@ -50,6 +50,7 @@ struct GlobalConfig {
     uint32_t server_id;
     uint16_t udp_port;
     uint32_t memory_num; // 0 ~ memory_num -1 is the server id 
+    uint32_t primary_node_limit;
     char     memory_ips[16][16];
 
     uint32_t ib_dev_id;
@@ -231,6 +232,8 @@ void serialize_conn_info(__OUT struct ConnInfo * conn_info);
 void deserialize_conn_info(__OUT struct ConnInfo * conn_info);
 
 int load_config(const char * fname, __OUT struct GlobalConfig * config);
+void set_primary_node_limit(struct GlobalConfig * config, uint32_t limit);
+int  set_primary_node_limit_from_str(struct GlobalConfig * config, const char * value_str);
 
 void encode_gc_slot(DecodedClientGCSlot * d_gc_slot, __OUT uint64_t * e_gc_slot);
 void decode_gc_slot(uint64_t e_gc_slot, __OUT DecodedClientGCSlot * d_gc_slot);

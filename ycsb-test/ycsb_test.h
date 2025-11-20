@@ -30,6 +30,7 @@ typedef struct TagRunClientArgs {
 
     uint32_t client_id;
     uint32_t num_threads;
+    uint32_t primary_node_limit;
 } RunClientArgs;
 
 int is_valid_workload(char * workload_name);

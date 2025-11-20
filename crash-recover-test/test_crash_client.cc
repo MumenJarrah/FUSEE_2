@@ -174,13 +174,20 @@ void test_crash_recover(Client & client) {
 }
 
 int main(int argc, char ** argv) {
-    if (argc != 2) {
-        printf("Usage: %s path-to-config-file\n", argv[0]);
+    if (argc < 2 || argc > 3) {
+        printf("Usage: %s path-to-config-file [num-primary-nodes]\n", argv[0]);
+        return 1;
     }
     int ret = 0;
     GlobalConfig config;
     ret = load_config(argv[1], &config);
     assert(ret == 0);
+    if (argc == 3) {
+        if (set_primary_node_limit_from_str(&config, argv[2]) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", argv[2]);
+            return 1;
+        }
+    }
 
     config.num_coroutines = 1;
     config.is_recovery = false;

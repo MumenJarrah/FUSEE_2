@@ -1,6 +1,6 @@
 // Multi-thread custom YCSB client (no barriers)
 // CLI:
-//   ycsb_custom_multi_client <config.json> <workload.txt> <latency_out.csv> <throughput_out.csv> <num_operations> <is_insert:0|1> <num_threads>
+//   ycsb_custom_multi_client <config.json> <workload.txt> <latency_out.csv> <throughput_out.csv> <num_operations> <is_insert:0|1> <num_threads> [num-primary-nodes]
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -196,8 +196,8 @@ static void * thread_main(void *argp) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 8) {
-        printf("Usage: %s <config.json> <workload.txt> <latency_out.csv> <throughput_out.csv> <num_operations> <is_insert:0|1> <num_threads>\n", argv[0]);
+    if (argc < 8 || argc > 9) {
+        printf("Usage: %s <config.json> <workload.txt> <latency_out.csv> <throughput_out.csv> <num_operations> <is_insert:0|1> <num_threads> [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
@@ -209,9 +209,16 @@ int main(int argc, char **argv) {
     bool use_insert = atoi(argv[6]) != 0;
     int num_threads = atoi(argv[7]);
     if (num_threads <= 0) { printf("num_threads must be > 0\n"); return 1; }
+    const char *primary_arg = (argc == 9) ? argv[8] : NULL;
 
     // load config
     GlobalConfig base_conf; int ret = load_config(config_path, &base_conf); assert(ret == 0);
+    if (primary_arg != NULL) {
+        if (set_primary_node_limit_from_str(&base_conf, primary_arg) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", primary_arg);
+            return 2;
+        }
+    }
 
     // Preload workload
     std::ifstream in(workload_path); if (!in.is_open()) { fprintf(stderr, "Failed to open workload file: %s\n", workload_path); return 2; }

@@ -73,6 +73,7 @@ private:
     uint32_t num_replication_;
     uint32_t num_idx_rep_;
     uint32_t num_memory_;
+    uint32_t primary_node_limit_;
 
     std::vector<ClientMMBlock *> mm_blocks_;
     spinlock_t mm_blocks_lock_;
@@ -159,6 +160,13 @@ private:
         // return last_allocated_ / 65536;
         return last_allocated_ ++;
 #endif
+    }
+
+    inline uint32_t get_primary_sid_from_hint(uint32_t hint) const {
+        if (primary_node_limit_ == 0 || primary_node_limit_ >= num_memory_) {
+            return hint % num_memory_;
+        }
+        return hint % primary_node_limit_;
     }
 
     inline float get_water_mark() {

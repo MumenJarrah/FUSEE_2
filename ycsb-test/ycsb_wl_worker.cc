@@ -5,8 +5,8 @@
 #include "ycsb_test.h"
 
 int main(int argc, char ** argv) {
-    if (argc != 4) {
-        printf("Usage: %s client-id config-file workload-name\n", argv[0]);
+    if (argc < 4 || argc > 5) {
+        printf("Usage: %s client-id config-file workload-name [num-primary-nodes]\n", argv[0]);
         return 1;
     }
 
@@ -16,6 +16,12 @@ int main(int argc, char ** argv) {
     GlobalConfig config;
     ret = load_config(argv[2], &config);
     assert(ret == 0);
+    if (argc == 5) {
+        if (set_primary_node_limit_from_str(&config, argv[4]) != 0) {
+            fprintf(stderr, "Invalid num-primary-nodes value: %s\n", argv[4]);
+            return 1;
+        }
+    }
 
     // assign client id and core id
     int client_id = atoi(argv[1]);

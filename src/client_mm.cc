@@ -29,6 +29,10 @@ ClientMM::ClientMM(const struct GlobalConfig * conf, UDPNetworkManager * nm) {
     num_replication_ = conf->num_replication;
     num_idx_rep_     = conf->num_idx_rep;
     num_memory_      = conf->memory_num;
+    primary_node_limit_ = conf->primary_node_limit;
+    if (primary_node_limit_ == 0 || primary_node_limit_ > num_memory_) {
+        primary_node_limit_ = num_memory_;
+    }
 
     last_allocated_ = conf->server_id;
     mm_block_sz_ = conf->block_size;
@@ -90,11 +94,19 @@ void ClientMM::get_block_map() {
     uint32_t num_rep_blocks = (server_num_blocks_ * num_memory_) / num_replication_;
     printf("num_rep_blocks: %d\n", num_rep_blocks);
 
+    uint32_t usable_primary_nodes = (primary_node_limit_ == 0) ? num_memory_ : primary_node_limit_;
     uint32_t block_cnt = 0;
     while (block_cnt < num_rep_blocks) {
-        uint32_t st_sid = block_cnt % num_memory_;
-        while (mn_addr_ptr[st_sid] == server_limit_addr_)
-            st_sid = (st_sid + 1) % num_memory_;
+        uint32_t st_sid = block_cnt % usable_primary_nodes;
+        uint32_t checked_nodes = 0;
+        while (mn_addr_ptr[st_sid] == server_limit_addr_) {
+            st_sid = (st_sid + 1) % usable_primary_nodes;
+            checked_nodes ++;
+            if (checked_nodes >= usable_primary_nodes) {
+                printf("All eligible primary servers are out of space\n");
+                exit(1);
+            }
+        }
 
         uint64_t addr_list[num_replication_];
         for (int i = 0; i < num_replication_; i ++) {
@@ -138,7 +150,7 @@ int32_t ClientMM::dyn_get_new_block_from_server(UDPNetworkManager * nm) {
     int ret = 0;
     uint32_t my_server_id = nm->get_server_id();
     uint32_t alloc_hint   = get_alloc_hint_rr();
-    uint32_t pr_server_id = nm->get_one_server_id(alloc_hint);
+    uint32_t pr_server_id = get_primary_sid_from_hint(alloc_hint);
     uint32_t num_servers  = nm->get_num_servers();
 
     struct MrInfo mr_info_list[MAX_REP_NUM];
@@ -177,7 +189,7 @@ int ClientMM::get_new_block_from_server(UDPNetworkManager * nm) {
     int ret = 0;
     uint32_t my_server_id = nm->get_server_id();
     uint32_t alloc_hint   = get_alloc_hint_rr();
-    uint32_t pr_server_id = nm->get_one_server_id(alloc_hint);
+    uint32_t pr_server_id = get_primary_sid_from_hint(alloc_hint);
     uint32_t num_servers  = nm->get_num_servers();
 
     struct MrInfo mr_info_list[MAX_REP_NUM];
@@ -217,7 +229,7 @@ int ClientMM::init_get_new_block_from_server(UDPNetworkManager * nm) {
 
     for (int i = 0; i < num_memory_; i ++) {
         uint32_t alloc_hint = get_alloc_hint_rr();
-        uint32_t pr_server_id = nm->get_one_server_id(alloc_hint);
+        uint32_t pr_server_id = get_primary_sid_from_hint(alloc_hint);
         server_id_list[i][0] = pr_server_id;
         ret = alloc_from_sid(pr_server_id, nm, TYPE_KVBLOCK, &mr_info_list[i][0]);
         if ((mr_info_list[i][0].addr & 0xFF) != 0) {
@@ -385,7 +397,7 @@ void ClientMM::mm_alloc_log_info(RecoverLogInfo * log_info, __OUT ClientMMAllocC
 void ClientMM::mm_alloc_subtable(UDPNetworkManager * nm, __OUT ClientMMAllocSubtableCtx * ctx) {
     uint32_t my_server_id = nm->get_server_id();
     uint32_t alloc_hint   = get_alloc_hint_rr();
-    uint32_t pr_server_id = nm->get_one_server_id(alloc_hint);
+    uint32_t pr_server_id = get_primary_sid_from_hint(alloc_hint);
     uint32_t num_servers  = nm->get_num_servers();
     int ret = 0;
     
